@@ -1,11 +1,11 @@
 /*
 
-  Authors (group members): Ryan, Dylan, Thomas, Kevin
-  Email addresses of group members:
-  Group name:
+  Authors (group members): Nathan, Dylan, Thomas, Kevin
+  Email addresses of group members: kwolfe2023@my.fit.edu
+  Group name: 34C
 
-  Course:
-  Section:
+  Course: Algorithms and Data Structures
+  Section: 3&4
 
   Description of the overall algorithm:
 
