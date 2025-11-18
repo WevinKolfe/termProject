@@ -34,28 +34,23 @@ public class QuerySidekick {
     }
 
     // Proc queries file
-    public void processOldQueries(String filename) {
-        try {
-            BufferedReader br = new BufferedReader(new FileReader(filename));
-            String line;
+    public void processOldQueries(String filename) throws IOException {
+      BufferedReader br = new BufferedReader(new FileReader(filename));
+      String line;
 
-            while ((line = br.readLine()) != null) {
-                String q = fixQueryString(line);
-                if (q.length() == 0) {
-                    continue;
-                }
-                freq.put(q, freq.getOrDefault(q, 0) + 1);
-            }
-            br.close();
-
-            ArrayList<String> keys = new ArrayList<>(freq.keySet());
-            for (String key : keys) {
-                insert(key);
-            }
-
-        } catch (IOException e) {
-            e.printStackTrace();
+      while ((line = br.readline()) != null) {
+        String query = fixQueryString(line);
+        if (query.length() == 0) {
+          continue;
         }
+        freq.put(query, freq.getOrDefault(query,0) + 1);
+      }
+      br.close();
+      
+      ArrayList<String> keys = new ArrayList<>(freq.keySet());
+      for (String key : keys) {
+        insert(key);
+      }
     }
 
     // Insert query in the trie
