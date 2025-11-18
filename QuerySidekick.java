@@ -1,3 +1,5 @@
+import java.io.*;
+import java.util.*;
 /*
 
   Authors (group members): Nathan, Dylan, Thomas, Kevin
@@ -16,10 +18,15 @@
 public class QuerySidekick
 {
     String[] guesses = new String[5];  // 5 guesses from QuerySidekick
+    Trie trie = new Trie();
 
+    public static void main(String[] args){
+        QuerySidekick qs = new QuerySidekick();
+        qs.processOldQueries(args[0]);
+
+    }
     // initialization of ...
-    public QuerySidekick()
-    {
+    public QuerySidekick() {
 
     }
 
@@ -29,7 +36,20 @@ public class QuerySidekick
     // str2 = str1.replaceAll("\\s+", " ");
     public void processOldQueries(String oldQueryFile)
     {
-     
+        try (BufferedReader reader = new BufferedReader(new FileReader(oldQueryFile))) {
+            String line;
+            String[] parts;
+            while ((line = reader.readLine()) != null) {
+                line = reader.readLine();
+                line = line.replaceAll("\\s+", " ");
+                trie.insert(line);
+            }
+            //test to see the structure
+            trie.printTrie();
+        } catch (IOException e) {
+            // error handling
+            System.out.println("Error reading file: " + e.getMessage());
+        }
     }
 
     // based on a character typed in by the user, return 5 query guesses in an array
