@@ -1,3 +1,8 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+
 /*
 
   Authors (group members): Nathan, Dylan, Thomas, Kevin
@@ -20,7 +25,7 @@ public class QuerySidekick
     // initialization of ...
     public QuerySidekick()
     {
-
+        
     }
 
     // process old queries from oldQueryFile
@@ -29,6 +34,31 @@ public class QuerySidekick
     // str2 = str1.replaceAll("\\s+", " ");
     public void processOldQueries(String oldQueryFile)
     {
+        //Placeholder demo of BufferedReader, reads and prints every single item in one file in about 5 seconds but doesn't do anything with that information yet
+        String[] oldQueries = new String[49618];
+        int linenumber = 0;
+        try {
+           BufferedReader in = new BufferedReader(new FileReader(oldQueryFile));
+           while (linenumber < oldQueries.length) {
+            try {
+                oldQueries[linenumber] = in.readLine();
+                System.out.println(oldQueries[linenumber]);
+                linenumber++;
+            }
+            catch(IOException e) {
+                
+            }
+        }
+       }
+       catch(FileNotFoundException e) {
+           
+       }
+       
+       
+        
+        
+        
+        
      
     }
 
@@ -37,7 +67,7 @@ public class QuerySidekick
     // currCharPosition: position of the current character in the query, starts from 0
     public String[] guess(char currChar, int currCharPosition)
     {
-	
+    
         return guesses;
     }
 
