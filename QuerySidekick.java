@@ -6,7 +6,7 @@
   Course: Algorithms and Data Structures
   Section: 3
 
-  Description of the overall algorithm:
+  Description of the overall algorithm: Autocomplete search engine, provide top 5 guesses for each character of a query
 */
 
 import java.io.BufferedReader;
@@ -28,12 +28,13 @@ public class QuerySidekick {
     private Node currentNode = root;
     private String currentPrefix = "";
 
+    // Make all my queries look the same (lowercase, equal spaces, trimmed)
     private String fixQueryString(String s) {
         s = s.toLowerCase().trim();
         return s.replaceAll("\\s+", " ");
     }
 
-    // Proc queries file
+    // Takes in each line of the file, fixes str, updates freq of word, inserts to trie
     public void processOldQueries(String filename) throws IOException {
       BufferedReader br = new BufferedReader(new FileReader(filename));
       String line;
@@ -72,7 +73,7 @@ public class QuerySidekick {
             node.top.add(query);
         }
 
-        // Sort by freq and length
+        // Sort by freq and length, high freq is more important, if they are equal then shorter query is picked 
         for (int i = 0; i < node.top.size(); i++) {            //This is probably slower
             for (int j = i + 1; j < node.top.size(); j++) {
                 String a = node.top.get(i);
@@ -93,30 +94,34 @@ public class QuerySidekick {
 
     // Top 5 guesses for the current prefix picked
     public String[] guess(char ch, int index) {
-        if (index == 0) {
+        if (index == 0) {      // New query, move current node to child of root matching the char
             currentPrefix = Character.toString(ch);
             currentNode = root.next.get(ch);
-        } else {
+        } else {              // Add char to prefix, go further into trie
             currentPrefix += ch;
-            if (currentNode != null) currentNode = currentNode.next.get(ch);
+            if (currentNode != null) {
+              currentNode = currentNode.next.get(ch);
+            }
         }
 
         String[] result = new String[5];
-        if (currentNode == null) return result;
+        if (currentNode == null) {      // No query in trie with matching prefix
+          return result;
+        }
 
         for (int i = 0; i < currentNode.top.size() && i < 5; i++) {
             result[i] = currentNode.top.get(i);
         }
 
-        return result;
+        return result;        // Result holds my top 5 guesses
     }
 
-    public void feedback(boolean isCorrect, String query) {
+    public void feedback(boolean isCorrect, String query) {     // Check if guess is correct
         if (query == null) {
             return;
         }
         query = fixQueryString(query);
-        freq.put(query, freq.getOrDefault(query, 0) + 1);
+        freq.put(query, freq.getOrDefault(query, 0) + 1);      // Increase the freq, insert to trie, so prefix nodes updates tops
         insert(query);
     }
 }
