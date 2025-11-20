@@ -39,7 +39,7 @@ public class QuerySidekick {
       BufferedReader br = new BufferedReader(new FileReader(filename));
       String line;
 
-      while ((line = br.readline()) != null) {
+      while ((line = br.readLine()) != null) {
         String query = fixQueryString(line);
         if (query.length() == 0) {
           continue;
