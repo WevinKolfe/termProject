@@ -13,7 +13,6 @@ public class QuerySidekick {
         ArrayList<String> top = new ArrayList<>(5);        // node-local top-5
         Node() {}
     }
-
     static final class EdgeLabel {
         final String base;
         final int start;
@@ -26,8 +25,7 @@ public class QuerySidekick {
         int length() { return end - start; }
         char charAt(int i) { return base.charAt(start + i); }
         char first() { return base.charAt(start); } // only call when length() > 0
-        @Override
-        public String toString() { return base.substring(start, end); }
+        @Override public String toString() { return base.substring(start, end); }
     }
 
     private final Node root = new Node();
@@ -44,11 +42,27 @@ public class QuerySidekick {
 
     private String currentPrefix = "";
 
-    // ===== Normalization =====
+    // ===== Normalization (Fix #2: manual whitespace compaction) =====
     private String fixQueryString(String s) {
-        s = s.toLowerCase().trim();
-        s = s.replaceAll("\\s+", " "); // regex OK, you decided to keep intern()
-        return s.intern();
+        s = s.toLowerCase();
+        StringBuilder sb = new StringBuilder(s.length());
+        boolean inSpace = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            boolean isSpace = (c <= ' '); // covers spaces, tabs, newlines
+            if (isSpace) {
+                if (!inSpace) { sb.append(' '); inSpace = true; }
+            } else {
+                sb.append(c);
+                inSpace = false;
+            }
+        }
+        // Trim leading/trailing spaces
+        int start = 0, end = sb.length();
+        while (start < end && sb.charAt(start) == ' ') start++;
+        while (end > start && sb.charAt(end - 1) == ' ') end--;
+        String out = (start == 0 && end == sb.length()) ? sb.toString() : sb.substring(start, end);
+        return out.intern();
     }
 
     // ===== Preprocessing =====
@@ -61,26 +75,22 @@ public class QuerySidekick {
                 freq.put(query, freq.getOrDefault(query, 0) + 1);
             }
         }
-
         ArrayList<String> keys = new ArrayList<>(freq.keySet());
         keys.sort((a, b) -> freq.get(b) - freq.get(a));
 
         // Build trie and prefix maps
         for (String key : keys) {
             insertCompressed(key);
-
             // First char
             char first = key.charAt(0);
             firstCharMap.computeIfAbsent(first, k -> new String[5]);
             insertIntoTop5(firstCharMap.get(first), key);
-
             // Two chars
             if (key.length() > 1) {
                 String two = key.substring(0, 2);
                 twoCharMap.computeIfAbsent(two, k -> new String[5]);
                 insertIntoTop5(twoCharMap.get(two), key);
             }
-
             // Three chars
             if (key.length() > 2) {
                 String three = key.substring(0, 3);
@@ -88,11 +98,9 @@ public class QuerySidekick {
                 insertIntoTop5(threeCharMap.get(three), key);
             }
         }
-
         // Global top-5
         globalTopSize = Math.min(5, keys.size());
         for (int i = 0; i < globalTopSize; i++) globalTop5[i] = keys.get(i);
-
         root.top.clear();
         for (int i = 0; i < globalTopSize; i++) root.top.add(globalTop5[i]);
     }
@@ -116,11 +124,17 @@ public class QuerySidekick {
         while (i < n && e.charAt(i) == s.charAt(i)) i++;
         return i;
     }
-
     private int commonPrefixLen(String a, String b) {
         int n = Math.min(a.length(), b.length());
         int i = 0;
         while (i < n && a.charAt(i) == b.charAt(i)) i++;
+        return i;
+    }
+    // Fix #1: Slice-aware LCP helper
+    private int lcpEdgeWithSlice(EdgeLabel e, String s, int sStart, int sEnd) {
+        int n = Math.min(e.length(), sEnd - sStart);
+        int i = 0;
+        while (i < n && e.base.charAt(e.start + i) == s.charAt(sStart + i)) i++;
         return i;
     }
 
@@ -129,13 +143,11 @@ public class QuerySidekick {
         int f = freq.getOrDefault(q, 0);
         return f * 1000 + prefixLen * 1200 - q.length();
     }
-
     private int scoreLive(String livePrefix, String q) {
         int f = freq.getOrDefault(q, 0);
         int dep = commonPrefixLen(livePrefix, q);
         return f * 1000 + dep * 2000 - q.length();
     }
-
     private void considerTop(Node node, int prefixLen, String query) {
         if (!node.top.contains(query)) node.top.add(query);
         node.top.sort((a, b) -> Integer.compare(
@@ -145,7 +157,7 @@ public class QuerySidekick {
         while (node.top.size() > 5) node.top.remove(node.top.size() - 1);
     }
 
-    // ===== insertCompressed with safe first-char indexing =====
+    // ===== insertCompressed with Fix #1 applied =====
     private void insertCompressed(String query) {
         Node node = root;
         int qStart = 0;
@@ -153,7 +165,6 @@ public class QuerySidekick {
         int prefixLen = 0;
 
         while (true) {
-            // No children → create child with full remaining slice
             if (node.children.isEmpty()) {
                 Node child = new Node();
                 child.label = new EdgeLabel(query, qStart, qEnd);
@@ -164,24 +175,16 @@ public class QuerySidekick {
                 considerTop(child, prefixLen + child.label.length(), query);
                 break;
             }
+            if (qStart >= qEnd) { break; }
 
-            // If fully consumed, stop (avoid charAt(qStart) when qStart == qEnd)
-            if (qStart >= qEnd) {
-                // We’ve matched the entire query along existing edges
-                break;
-            }
-
-            // Try direct child by first char
             Node match = node.childIndex.get(query.charAt(qStart));
             int bestLcp = 0;
             int matchIdx = -1;
-
             if (match != null) {
-                bestLcp = lcpEdgeWithString(match.label, query.substring(qStart));
+                bestLcp = lcpEdgeWithSlice(match.label, query, qStart, qEnd); // no substring allocation
                 matchIdx = node.children.indexOf(match);
             }
 
-            // No overlap → create sibling
             if (match == null || bestLcp == 0) {
                 Node sibling = new Node();
                 sibling.label = new EdgeLabel(query, qStart, qEnd);
@@ -193,22 +196,15 @@ public class QuerySidekick {
                 break;
             }
 
-            // Full match of child label → descend
             if (bestLcp == match.label.length()) {
                 prefixLen += bestLcp;
                 qStart += bestLcp;
                 considerTop(match, prefixLen, query);
-
-                if (qStart == qEnd) {
-                    // Query fully consumed
-                    break;
-                }
-
+                if (qStart == qEnd) { break; }
                 node = match;
                 continue;
             }
 
-            // Partial overlap → split child into common + oldSuffix + newSuffix
             EdgeLabel oldLabel = match.label;
             EdgeLabel commonSlice = new EdgeLabel(oldLabel.base, oldLabel.start, oldLabel.start + bestLcp);
             EdgeLabel oldSuffix = new EdgeLabel(oldLabel.base, oldLabel.start + bestLcp, oldLabel.end);
@@ -217,14 +213,12 @@ public class QuerySidekick {
             Node split = new Node();
             split.label = commonSlice;
 
-            // Reassign existing child under split
             match.label = oldSuffix;
             split.children.add(match);
             if (match.label.length() > 0) {
                 split.childIndex.put(match.label.first(), match);
             }
 
-            // Add new child for newSuffix (only if non-empty)
             if (newSuffix.length() > 0) {
                 Node newChild = new Node();
                 newChild.label = newSuffix;
@@ -232,61 +226,49 @@ public class QuerySidekick {
                 split.childIndex.put(newChild.label.first(), newChild);
                 considerTop(newChild, prefixLen + split.label.length() + newChild.label.length(), query);
             }
-            // Replace in parent's children list
+
             node.children.set(matchIdx, split);
             if (split.label.length() > 0) {
                 node.childIndex.put(split.label.first(), split);
             }
 
-            // Update top lists
             considerTop(split, prefixLen + split.label.length(), query);
             considerTop(match, prefixLen + split.label.length() + match.label.length(), query);
             break;
         }
     }
 
-    // ===== guess with prefix maps and indexed trie (safe guards) =====
+    // ===== guess with Fix #1 applied =====
     public String[] guess(char ch, int index) {
         ch = Character.toLowerCase(ch);
         currentPrefix = (index == 0) ? Character.toString(ch) : (currentPrefix + ch);
 
         // Instant lookup for first char
         if (index == 0) return firstCharMap.getOrDefault(ch, emptyTop5());
-
         // Instant lookup for two chars
         if (index == 1) return twoCharMap.getOrDefault(currentPrefix.substring(0, 2), emptyTop5());
-
         // Instant lookup for three chars
         if (index == 2) return threeCharMap.getOrDefault(currentPrefix.substring(0, 3), emptyTop5());
 
-        // For longer prefixes, use indexed trie
+        // For longer prefixes, use indexed trie without substring allocations
         Node node = root;
         String remaining = currentPrefix;
         Node lastReached = root;
+        int rStart = 0, rEnd = remaining.length();
 
         while (true) {
             if (node == null) break;
-            if (remaining.isEmpty()) { // avoid remaining.charAt(0) on empty
-                lastReached = node;
-                break;
-            }
-
-            Node match = node.childIndex.get(remaining.charAt(0));
+            if (rEnd - rStart == 0) { lastReached = node; break; }
+            Node match = node.childIndex.get(remaining.charAt(rStart));
             if (match == null) break;
 
-            int lcp = lcpEdgeWithString(match.label, remaining);
-            if (lcp == remaining.length()) {
-                // Typed prefix ends inside this edge
-                lastReached = match;
-                break;
-            }
+            int lcp = lcpEdgeWithSlice(match.label, remaining, rStart, rEnd);
+            if (lcp == (rEnd - rStart)) { lastReached = match; break; }
             if (lcp == match.label.length()) {
-                // Consume full child label and descend
-                remaining = remaining.substring(lcp);
+                rStart += lcp; // consume without allocating
                 lastReached = match;
                 node = match;
             } else {
-                // Diverges inside edge; anchor at match
                 lastReached = match;
                 break;
             }
@@ -298,7 +280,6 @@ public class QuerySidekick {
         List<String> src = (lastReached != null && !lastReached.top.isEmpty())
                 ? lastReached.top
                 : Arrays.asList(globalTop5);
-
         for (String q : src) {
             if (q == null) continue;
             int s = scoreLive(currentPrefix, q);
